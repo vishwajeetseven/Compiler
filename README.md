@@ -4,7 +4,6 @@ Programming Language Compiler
 A web-based interactive code compiler supporting multiple programming languages including Java, Python, C++, JavaScript, C#, Rust, Go, and HTML.  
 Features include real-time execution, terminal output, theme switching, interactive input handling, and automatic HTML preview.
 
----
 
 ## Features
 - Multiple language support
@@ -16,7 +15,6 @@ Features include real-time execution, terminal output, theme switching, interact
 - STDIN input box for compiled languages
 - Modern user interface
 
----
 
 ## Technologies Used
 | Technology | Purpose |
@@ -26,7 +24,6 @@ Features include real-time execution, terminal output, theme switching, interact
 | Piston API | Execution engine for compiled languages |
 | HTML/CSS/JavaScript | UI and functionality |
 
----
 
 ## How to Use
 1. Select a programming language from the dropdown menu.
@@ -35,4 +32,3 @@ Features include real-time execution, terminal output, theme switching, interact
 4. View output in the terminal or HTML preview section.
 5. Use the theme toggle to switch between light and dark mode.
 
----
