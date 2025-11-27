@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compiler</title>
+    <style>
+        /* --- CSS VARIABLES --- */
+        :root {
+            /* DEFAULT: PURE BLACK THEME */
+            --bg-body: #000000;
+            --bg-sidebar: #000000;
+            --bg-panel: #000000;
+            --border: #333333;
+            --text-main: #ffffff;
+            --accent: #007acc;
+            --accent-hover: #005a9e;
+            --input-bg: #000000;
+            --scrollbar-thumb: #333;
+        }
+
+        /* LIGHT MODE OVERRIDES */
+        body.light-mode {
+            --bg-body: #ffffff;
+            --bg-sidebar: #f3f3f3;
+            --bg-panel: #ffffff;
+            --border: #e1e1e1;
+            --text-main: #333333;
+            --accent: #007acc;
+            --input-bg: #ffffff;
+            --scrollbar-thumb: #ccc;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: 0.3s;
+        }
+
+        /* --- HEADER --- */
+        header {
+            background-color: var(--bg-sidebar);
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 15px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .controls-group { display: flex; align-items: center; gap: 15px; }
+
+        select {
+            background: var(--input-bg);
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            padding: 5px;
+            border-radius: 3px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        /* --- BUTTONS --- */
+        .run-btn {
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            padding: 6px 16px;
+            border-radius: 2px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: bold;
+        }
+        .run-btn:hover { background-color: var(--accent-hover); }
+
+        /* --- TOGGLE SWITCH --- */
+        .switch-wrapper { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; }
+        .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #333; transition: .4s; border-radius: 34px; border: 1px solid var(--border); }
+        .slider:before { position: absolute; content: ""; height: 12px; width: 12px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--accent); }
+        input:checked + .slider:before { transform: translateX(20px); }
+
+        /* --- LAYOUT --- */
+        .main { display: flex; flex: 1; height: calc(100vh - 50px); }
+        
+        #editor-container { flex: 1; position: relative; border-right: 1px solid var(--border); }
+        #editor { position: absolute; top: 0; bottom: 0; left: 0; right: 0; }
+
+        /* --- RIGHT PANEL --- */
+        #right-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--bg-panel);
+            min-width: 300px;
+        }
+
+        .panel-header {
+            padding: 8px 15px;
+            background-color: var(--bg-sidebar);
+            border-bottom: 1px solid var(--border);
+            font-size: 11px;
+            font-weight: bold;
+            display: flex; justify-content: space-between;
+            color: var(--text-main);
+            text-transform: uppercase;
+        }
+
+        #term-output { flex: 1; padding: 15px; overflow-y: auto; font-family: 'Consolas', monospace; font-size: 14px; }
+        .log-line { margin-bottom: 4px; white-space: pre-wrap; }
+        .log-error { color: #ff5555; }
+        .log-sys { color: #666; font-style: italic; border-top: 1px dashed #333; margin-top: 5px; padding-top: 5px; }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: var(--bg-body); }
+        ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 5px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+
+        /* HTML Preview Frame */
+        #preview-frame {
+            flex: 1; border: none; background-color: white; display: none; transition: 0.3s;
+        }
+
+        /* --- INPUTS --- */
+        #interactive-input { display: none; padding: 10px; border-top: 1px solid var(--border); background: var(--bg-sidebar); }
+        #interactive-input.visible { display: flex; align-items: center; }
+        #console-input { flex: 1; background: transparent; border: none; color: var(--text-main); outline: none; font-family: inherit; font-size: 14px; }
+
+        #batch-input-area { display: none; flex-direction: column; height: 100px; border-top: 1px solid var(--border); background: var(--bg-sidebar); padding: 5px; }
+        #batch-stdin { flex: 1; resize: none; background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border); outline: none; padding: 8px; font-family: 'Consolas', monospace; }
+
+    </style>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.6/ace.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.6/ext-language_tools.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+</head>
+<body>
+
+    <header>
+        <div class="controls-group">
+            <div style="font-weight:bold; color:var(--text-main); display:flex; gap:8px; align-items:center;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#007acc" stroke-width="2"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></svg>
+                <span>Compiler</span>
+            </div>
+            
+            <select id="langSelect" onchange="changeLanguage()">
+                <option value="java" selected>Java (OpenJDK)</option>
+                <option value="python">Python (Interactive)</option>
+                <option value="html">HTML5 (Smart Preview)</option>
+                <option value="javascript">JavaScript (Node.js)</option>
+                <option value="cpp">C++ (GCC)</option>
+                <option value="csharp">C# (Mono)</option>
+                <option value="rust">Rust</option>
+                <option value="go">Go</option>
+            </select>
+        </div>
+
+        <div class="controls-group">
+            <div class="switch-wrapper">
+                <span>Light</span>
+                <label class="switch">
+                    <input type="checkbox" onchange="toggleTheme(this)">
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <button class="run-btn" id="runBtn" onclick="executeCode()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Run
+            </button>
+        </div>
+    </header>
+
+    <div class="main">
+        <div id="editor-container">
+            <div id="editor"></div>
+        </div>
+        
+        <div id="right-panel">
+            <div class="panel-header">
+                <span id="panel-title">TERMINAL</span>
+                <span id="clear-btn" style="cursor:pointer; opacity:0.7" onclick="clearLogs()">CLEAR</span>
+            </div>
+            
+            <div id="term-output">
+                <div class="log-sys">System Ready. Select a language...</div>
+            </div>
+
+            <iframe id="preview-frame"></iframe>
+
+            <div id="interactive-input">
+                <span id="prompt-label" style="margin-right:8px; color:var(--accent); font-weight:bold;">&gt;</span>
+                <input type="text" id="console-input" autocomplete="off" placeholder="Type here...">
+            </div>
+
+            <div id="batch-input-area">
+                <div style="font-size:11px; margin-bottom:4px; opacity:0.7;">STDIN (Input):</div>
+                <textarea id="batch-stdin" placeholder="Enter program input here..."></textarea>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIG ---
+        const editor = ace.edit("editor");
+        editor.setTheme("ace/theme/terminal"); // Start Pure Black
+        editor.session.setMode("ace/mode/java"); // Start in Java Mode
+        editor.setFontSize(14);
+        editor.setShowPrintMargin(false);
+        editor.setOptions({ enableBasicAutocompletion: true, enableLiveAutocompletion: true });
+
+        let pyodide = null;
+        let resolveInput = null;
+
+        const boilerplates = {
+            java: { 
+                mode: "java", type: "batch", version: "15.0.2", 
+                code: `import java.util.Scanner;\n\npublic class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello from Java!");\n        \n        Scanner s = new Scanner(System.in);\n        if(s.hasNext()) {\n            System.out.println("Read from STDIN: " + s.next());\n        } else {\n            System.out.println("No Input found in STDIN box.");\n        }\n    }\n}` 
+            },
+            python: { 
+                mode: "python", type: "interactive",
+                code: `import asyncio\n\nprint("--- Interactive Python ---")\nname = await input("Enter your name: ")\nprint(f"Hello, {name}!")`
+            },
+            html: { 
+                mode: "html", type: "preview",
+                code: `<!DOCTYPE html>\n<html>\n<head>\n<style>\n  /* No default body style needed - Intelligent Preview handles it! */\n  h1 { color: #007acc; }\n</style>\n</head>\n<body>\n  <h1>Smart Preview</h1>\n  <p>Toggle the 'Light' switch on top.</p>\n  <p>The background of this page will adapt automatically!</p>\n</body>\n</html>`
+            },
+            javascript: { mode: "javascript", type: "batch", version: "18.15.0", code: `console.log("Hello from Node.js");` },
+            cpp: { mode: "c_cpp", type: "batch", version: "10.2.0", code: `#include <iostream>\nusing namespace std;\nint main() {\n    string v;\n    if(cin >> v) cout << "Read: " << v << endl;\n    else cout << "No Input" << endl;\n    return 0;\n}` },
+            csharp: { mode: "csharp", type: "batch", version: "6.12.0", code: `using System;\nclass Program {\n    static void Main() {\n        Console.WriteLine("Hello C#");\n    }\n}` },
+            rust: { mode: "rust", type: "batch", version: "1.68.2", code: `fn main() {\n    println!("Hello Rust");\n}` },
+            go: { mode: "golang", type: "batch", version: "1.16.2", code: `package main\nimport "fmt"\nfunc main() {\n    fmt.Println("Hello Go")\n}` }
+        };
+
+        // --- INITIALIZATION ---
+        // Load whatever is selected in dropdown (Java)
+        changeLanguage();
+        // Load Python engine in background
+        initPyodide();
+
+        // --- THEME & INTELLIGENT PREVIEW ---
+        function toggleTheme(cb) {
+            if (cb.checked) {
+                document.body.classList.add('light-mode');
+                editor.setTheme("ace/theme/chrome");
+            } else {
+                document.body.classList.remove('light-mode');
+                editor.setTheme("ace/theme/terminal");
+            }
+            if (document.getElementById('langSelect').value === 'html') {
+                updatePreview();
+            }
+        }
+
+        function clearLogs() { document.getElementById('term-output').innerHTML = ''; }
+
+        // --- LANGUAGE HANDLER ---
+        function changeLanguage() {
+            const lang = document.getElementById('langSelect').value;
+            const config = boilerplates[lang];
+            
+            editor.session.setMode("ace/mode/" + config.mode);
+            editor.setValue(config.code, -1);
+
+            const term = document.getElementById('term-output');
+            const preview = document.getElementById('preview-frame');
+            const batch = document.getElementById('batch-input-area');
+            const run = document.getElementById('runBtn');
+            const clear = document.getElementById('clear-btn');
+            const title = document.getElementById('panel-title');
+
+            if (config.type === "preview") {
+                term.style.display = 'none';
+                batch.style.display = 'none';
+                preview.style.display = 'block';
+                run.style.display = 'none';
+                clear.style.display = 'none';
+                title.innerText = "WEB PREVIEW";
+                updatePreview();
+            } else {
+                term.style.display = 'block';
+                preview.style.display = 'none';
+                run.style.display = 'flex';
+                clear.style.display = 'block';
+                title.innerText = "TERMINAL";
+                batch.style.display = (config.type === "batch") ? 'flex' : 'none';
+            }
+        }
+
+        editor.session.on('change', () => {
+            if (document.getElementById('langSelect').value === 'html') updatePreview();
+        });
+
+        // --- INTELLIGENT PREVIEW LOGIC ---
+        function updatePreview() {
+            const frame = document.getElementById('preview-frame');
+            const doc = frame.contentDocument || frame.contentWindow.document;
+            const userCode = editor.getValue();
+            
+            const isLight = document.body.classList.contains('light-mode');
+            const bgColor = isLight ? '#ffffff' : '#000000';
+            const txtColor = isLight ? '#000000' : '#ffffff';
+
+            const smartStyle = `<style>body{background-color:${bgColor}; color:${txtColor}; transition: 0.3s;}</style>`;
+
+            doc.open();
+            doc.write(smartStyle + userCode);
+            doc.close();
+        }
+
+        // --- EXECUTION ---
+        async function executeCode() {
+            const lang = document.getElementById('langSelect').value;
+            const config = boilerplates[lang];
+            
+            if (lang === 'python') await runPython();
+            else if (config.type === 'batch') await runBatch(lang, config.version);
+        }
+
+        // --- PYTHON ---
+        async function initPyodide() {
+            log("Loading Python...", "log-sys");
+            try {
+                pyodide = await loadPyodide();
+                pyodide.setStdout({ batched: (m) => log(m) });
+                await pyodide.runPythonAsync(`
+import builtins
+from js import ask_input
+async def _input(p=""): return await ask_input(p)
+builtins.input = _input
+                `);
+                log("Python Ready.", "log-sys");
+            } catch(e) { log(e, "log-error"); }
+        }
+
+        async function runPython() {
+            if(!pyodide) return log("Engine loading...", "log-error");
+            document.getElementById('runBtn').disabled = true;
+            try { await pyodide.runPythonAsync(editor.getValue()); }
+            catch (e) { log(e, "log-error"); }
+            document.getElementById('runBtn').disabled = false;
+            log(">> Finished", "log-sys");
+        }
+
+        // --- REMOTE BATCH ---
+        async function runBatch(lang, ver) {
+            const btn = document.getElementById('runBtn');
+            btn.disabled = true; btn.innerHTML = "Running...";
+            
+            try {
+                const res = await fetch('https://emkc.org/api/v2/piston/execute', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        language: lang, version: ver,
+                        files: [{ content: editor.getValue() }],
+                        stdin: document.getElementById('batch-stdin').value
+                    })
+                });
+                const data = await res.json();
+                if(data.run) {
+                    if(data.run.stderr) log(data.run.stderr, "log-error");
+                    else log(data.run.stdout);
+                }
+            } catch(e) { log("Network Error", "log-error"); }
+            
+            btn.disabled = false; btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="white"><polygon points="5 3 19 12 5 21 5 3"/></svg> Run`;
+        }
+
+        // --- UTILS ---
+        function log(msg, cls="") {
+            const div = document.getElementById('term-output');
+            const line = document.createElement('div');
+            line.className = "log-line " + cls;
+            line.textContent = msg;
+            div.appendChild(line);
+            div.scrollTop = div.scrollHeight;
+        }
+
+        window.ask_input = function(prompt) {
+            return new Promise(resolve => {
+                const area = document.getElementById('interactive-input');
+                const field = document.getElementById('console-input');
+                document.getElementById('prompt-label').innerText = prompt || ">";
+                area.classList.add('visible');
+                field.value = "";
+                field.focus();
+                resolveInput = resolve;
+            });
+        }
+
+        document.getElementById('console-input').addEventListener('keydown', (e) => {
+            if(e.key === "Enter") {
+                const val = e.target.value;
+                document.getElementById('interactive-input').classList.remove('visible');
+                log((document.getElementById('prompt-label').innerText) + " " + val);
+                if(resolveInput) resolveInput(val);
+            }
+        });
+    </script>
+</body>
+</html>
